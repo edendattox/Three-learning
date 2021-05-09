@@ -62,7 +62,7 @@ function init() {
     x: 0,
     y: 0,
   };
-
+  c;
   const sizes = {
     width: window.innerWidth,
     height: window.innerHeight,
