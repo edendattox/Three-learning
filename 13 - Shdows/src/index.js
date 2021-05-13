@@ -28,10 +28,10 @@ function init() {
    *  Lights
    */
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
   gui.add(ambientLight, "intensity").min(0).max(1).step(0.001);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
   directionalLight.position.set(2, 2, -1);
 
   directionalLight.castShadow = true;
@@ -49,17 +49,40 @@ function init() {
 
   // Spot Light
 
-  const spotLight = new THREE.SpotLight(0xffffff, 0.4, 10, Math.PI * 0.3);
+  const spotLight = new THREE.SpotLight(0xffffff, 0.3, 10, Math.PI * 0.3);
 
   spotLight.castShadow = true;
   spotLight.shadow.mapSize.set(1024, 1024);
+  spotLight.shadow.camera.fov = 30;
+  spotLight.shadow.camera.near = 1;
+  spotLight.shadow.camera.far = 6;
 
   spotLight.position.set(0, 2, 2);
   scene.add(spotLight);
   scene.add(spotLight.target);
 
   const spotLightCameraHelper = new THREE.CameraHelper(spotLight.shadow.camera);
+  spotLightCameraHelper.visible = false;
   scene.add(spotLightCameraHelper);
+
+  // Point light
+
+  const pointLight = new THREE.PointLight(0xffffff, 0.3);
+
+  pointLight.castShadow = true;
+  pointLight.shadow.mapSize.set(1024, 1024);
+  pointLight.shadow.camera.near = 0.1;
+  pointLight.shadow.camera.far = 5;
+
+  pointLight.position.set(-1, 1, 0);
+  scene.add(pointLight);
+
+  const pointLightCameraHelper = new THREE.CameraHelper(
+    pointLight.shadow.camera
+  );
+  pointLightCameraHelper.visible = false;
+  scene.add(pointLightCameraHelper);
+
   // different types of algorithms can be applied to shadow maps
 
   //  1. THREE.BasicShadowMap - very performant but lousy quality of
@@ -158,7 +181,7 @@ function init() {
   renderer.setSize(sizes.width, sizes.height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   /*
