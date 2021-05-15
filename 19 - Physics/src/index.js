@@ -2,12 +2,45 @@ import "./style/main.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as dat from "dat.gui";
+import * as CANNON from "cannon-es";
 
 function init() {
   /*
    * Debug
    */
   const gui = new dat.GUI();
+  const debugObject = {};
+
+  debugObject.createSphere = () => {
+    createSphere(Math.random() * 0.5, {
+      x: (Math.random() - 0.5) * 3,
+      y: 3,
+      z: (Math.random() - 0.5) * 3,
+    });
+  };
+
+  debugObject.createBox = () => {
+    createBox(Math.random(), Math.random(), Math.random(), {
+      x: (Math.random() - 0.5) * 3,
+      y: 3,
+      z: (Math.random() - 0.5) * 3,
+    });
+  };
+
+  debugObject.reset = () => {
+    for (const object of objectsToUpdate) {
+      //  Remove body
+      object.body.removeEventListener("collide", playHitSound);
+      world.removeBody(object.body);
+
+      // Remove mesh
+      scene.remove(object.mesh);
+    }
+  };
+
+  gui.add(debugObject, "createSphere");
+  gui.add(debugObject, "createBox");
+  gui.add(debugObject, "reset");
 
   /*
    * Canvas
@@ -15,10 +48,28 @@ function init() {
   const canvas = document.querySelector(".webgl");
 
   /*
+   * Sounds
+   */
+
+  const hitSound = new Audio("/sounds/hit.mp3");
+
+  const playHitSound = (collision) => {
+    const impactStrength = collision.contact.getImpactVelocityAlongNormal();
+    if (impactStrength > 2.5) {
+      hitSound.volume = Math.random();
+      hitSound.currentTime = 0;
+      hitSound.play();
+    }
+  };
+
+  /*
    * Texture
    */
 
   const textureLoader = new THREE.TextureLoader();
+  const cubeTextureLoader = new THREE.CubeTextureLoader();
+
+  // const environmentMapTexture = cubeTextureLoader.load([
 
   /*
    * scene
@@ -26,44 +77,104 @@ function init() {
   const scene = new THREE.Scene();
 
   /*
+   * Physics
+   */
+  // World
+  const world = new CANNON.World();
+  world.broadphase = new CANNON.SAPBroadphase(world);
+  world.allowSleep = true;
+  world.gravity.set(0, -9.82, 0);
+
+  // Materials
+  const defaultMaterials = new CANNON.Material("default");
+
+  const defaultContactMaterial = new CANNON.ContactMaterial(
+    defaultMaterials,
+    defaultMaterials,
+    {
+      friction: 0.1,
+      restitution: 0.9,
+    }
+  );
+  world.addContactMaterial(defaultContactMaterial);
+  world.defaultContactMaterial = defaultContactMaterial;
+
+  // Sphere
+  // const sphereShape = new CANNON.Sphere(0.5);
+  // const sphereBody = new CANNON.Body({
+  //   mass: 1,
+  //   position: new CANNON.Vec3(0, 3, 0),
+  //   shape: sphereShape,
+  //   // material: defaultMaterials,
+  // });
+  // force
+  // sphereBody.applyLocalForce(
+  //   new CANNON.Vec3(150, 0, 0),
+  //   new CANNON.Vec3(0, 0, 0)
+  // );
+  // world.addBody(sphereBody);
+
+  // Floor
+
+  const floorShape = new CANNON.Plane();
+  const floorBody = new CANNON.Body();
+  // floorBody.material = defaultMaterials;
+  floorBody.mass = 0;
+  floorBody.quaternion.setFromAxisAngle(
+    new CANNON.Vec3(-1, 0, 0),
+    Math.PI * 0.5
+  );
+  floorBody.addShape(floorShape);
+
+  world.addBody(floorBody);
+
+  /*
    * objects
    */
 
-  const object1 = new THREE.Mesh(
-    new THREE.SphereBufferGeometry(0.5, 16, 16),
-    new THREE.MeshBasicMaterial({ color: "#ff0000" })
-  );
-  object1.position.set(-2, 0, 0);
+  // const sphere = new THREE.Mesh(
+  //   new THREE.SphereBufferGeometry(0.5, 32, 32),
+  //   new THREE.MeshStandardMaterial({
+  //     metalness: 0.3,
+  //     roughness: 0.4,
+  //   })
+  // );
+  // sphere.castShadow = true;
+  // sphere.position.set(0, 0.5, 0);
+  // scene.add(sphere);
 
-  const object2 = new THREE.Mesh(
-    new THREE.SphereBufferGeometry(0.5, 16, 16),
-    new THREE.MeshBasicMaterial({ color: "#ff0000" })
-  );
-  const object3 = new THREE.Mesh(
-    new THREE.SphereBufferGeometry(0.5, 16, 16),
-    new THREE.MeshBasicMaterial({ color: "#ff0000" })
-  );
-  object3.position.set(2, 0, 0);
+  // floor
 
-  scene.add(object1, object2, object3);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10),
+    new THREE.MeshStandardMaterial({
+      color: "#777777",
+      metalness: 0.3,
+      roughness: 0.4,
+    })
+  );
+  floor.receiveShadow = true;
+  floor.rotation.set(-Math.PI * 0.5, 0, 0);
+
+  scene.add(floor);
 
   /*
-   * Raycaster
+   * Lights
    */
 
-  const raycaster = new THREE.Raycaster();
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+  scene.add(ambientLight);
 
-  const rayOrigin = new THREE.Vector3(-3, 0, 0);
-  const rayDirection = new THREE.Vector3(10, 0, 0);
-  rayDirection.normalize();
-
-  // raycaster.set(rayOrigin, rayDirection);
-
-  // const intersect = raycaster.intersectObject(object2);
-  // console.log(intersect);
-
-  // const intersects = raycaster.intersectObjects([object1, object2, object3]);
-  // console.log(intersects);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.2);
+  directionalLight.castShadow = true;
+  directionalLight.shadow.mapSize.set(1024, 1024);
+  directionalLight.shadow.camera.far = 15;
+  directionalLight.shadow.camera.left = -7;
+  directionalLight.shadow.camera.top = 7;
+  directionalLight.shadow.camera.right = 7;
+  directionalLight.shadow.camera.bottom = -7;
+  directionalLight.position.set(5, 5, 5);
+  scene.add(directionalLight);
 
   /**
    * Sizes
@@ -93,21 +204,6 @@ function init() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   });
 
-  window.addEventListener("click", () => {
-    if (currentIntersects) {
-      console.log("click");
-    }
-  });
-  /*
-   *  Mouse
-   */
-
-  const mouse = new THREE.Vector2();
-  window.addEventListener("mousemove", () => {
-    mouse.x = (event.clientX / sizes.width) * 2 - 1;
-    mouse.y = -(event.clientX / sizes.width) * 2 + 1;
-  });
-
   const camera = new THREE.PerspectiveCamera(
     75,
     sizes.width / sizes.height,
@@ -115,7 +211,7 @@ function init() {
     100
   );
 
-  camera.position.set(0, 0, 3);
+  camera.position.set(3, 3, 7);
   scene.add(camera);
 
   /**
@@ -124,68 +220,130 @@ function init() {
   const controls = new OrbitControls(camera, canvas);
 
   /*
-   *  Adding Damping
+   * renderer
    */
   controls.enableDamping = true;
-
   const renderer = new THREE.WebGLRenderer({
     canvas: canvas,
   });
   renderer.setSize(sizes.width, sizes.height);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  // Clock
+  /*
+   * Utils
+   */
+
+  const objectsToUpdate = [];
+
+  const sphereGeometry = new THREE.SphereBufferGeometry(1, 20, 20);
+  const sphereMaterial = new THREE.MeshNormalMaterial({
+    // metalness: 0.3,
+    // roughness: 0.4,
+  });
+
+  const createSphere = (radius, position) => {
+    // THree.js mesh
+    const mesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    mesh.scale.set(radius, radius, radius);
+    mesh.castShadow = true;
+    mesh.position.copy(position);
+    scene.add(mesh);
+
+    // Cannon.js body
+
+    const shape = new CANNON.Sphere(radius);
+
+    const body = new CANNON.Body({
+      mass: 1,
+      position: new CANNON.Vec3(0, 3, 0),
+      shape,
+      material: defaultMaterials,
+    });
+    body.position.copy(position);
+    body.addEventListener("collide", playHitSound);
+    world.addBody(body);
+
+    // Save objects to update the
+    objectsToUpdate.push({
+      mesh: mesh,
+      body: body,
+    });
+  };
+
+  createSphere(0.5, { x: 0, y: 3, z: 0 });
+
+  // Box
+
+  const boxGeometry = new THREE.BoxBufferGeometry(1, 1, 1);
+  const boxMaterial = new THREE.MeshNormalMaterial({
+    // metalness: 0.3,
+    // roughness: 0.4,
+  });
+
+  const createBox = (width, height, depth, position) => {
+    // THree.js mesh
+    const mesh = new THREE.Mesh(boxGeometry, boxMaterial);
+    mesh.scale.set(width, height, depth);
+    mesh.castShadow = true;
+    mesh.position.copy(position);
+    scene.add(mesh);
+
+    // Cannon.js body
+
+    const shape = new CANNON.Box(
+      new CANNON.Vec3(width * 0.5, height * 0.5, depth * 0.5)
+    );
+
+    const body = new CANNON.Body({
+      mass: 1,
+      position: new CANNON.Vec3(0, 3, 0),
+      shape,
+      material: defaultMaterials,
+    });
+    body.position.copy(position);
+    body.addEventListener("collide", playHitSound);
+    world.addBody(body);
+
+    // Save objects to update the
+    objectsToUpdate.push({
+      mesh: mesh,
+      body: body,
+    });
+  };
+
+  createBox(1, 1.5, 2, { x: 0, y: 3, z: 0 });
+
+  /*
+   * Clock
+   */
   const clock = new THREE.Clock();
+  let oldElapsedTime = 0;
 
-  let currentIntersects = null;
-
-  //   Animations
+  /*
+   * Animations
+   */
   const tick = () => {
     /*
      ** Clock
      */
     const elapsedTime = clock.getElapsedTime();
+    const deltaTime = elapsedTime - oldElapsedTime;
+    oldElapsedTime = elapsedTime;
 
     /*
-     * update object
+     * update physic world
      */
+    // sphereBody.applyForce(new CANNON.Vec3(-0.5, 0, 0), sphereBody.position);
 
-    object1.position.y = Math.sin(elapsedTime * 0.3) * 1.5;
-    object2.position.y = Math.sin(elapsedTime * 0.8) * 1.5;
-    object3.position.y = Math.sin(elapsedTime * 1.4) * 1.5;
+    world.step(1 / 60, deltaTime, 3);
 
-    // cast a ray
-    raycaster.setFromCamera(mouse, camera);
-
-    // const rayOrigin = new THREE.Vector3(-3, 0, 0);
-    // const rayDirection = new THREE.Vector3(1, 0, 0);
-
-    // rayDirection.normalize();
-    // raycaster.set(rayOrigin, rayDirection);
-
-    const objectsToText = [object1, object2, object3];
-    const intersects = raycaster.intersectObjects(objectsToText);
-
-    for (const object of objectsToText) {
-      object.material.color.set("#ff0000");
+    for (const object of objectsToUpdate) {
+      object.mesh.position.copy(object.body.position);
+      object.mesh.quaternion.copy(object.body.quaternion);
     }
 
-    for (const intersect of intersects) {
-      intersect.object.material.color.set("#0000ff");
-    }
-
-    if (intersects.length) {
-      if (currentIntersects === null) {
-        console.log("mouse enter");
-      }
-      currentIntersects = intersects[0];
-    } else {
-      if (currentIntersects) {
-        console.log("mouse leave");
-      }
-      currentIntersects = null;
-    }
-
-    // console.log(intersects.length);
+    // sphere.position.copy(sphereBody.position);
 
     /*
      * Update Controls
@@ -206,3 +364,17 @@ function init() {
 init();
 
 // https://www.kenney.nl/assets/particle-pack
+
+// 2d library
+// matter.js;
+// Pa.js;
+// Plank.js;
+// Box2D.js;
+
+// 3d library
+// Ammo.js
+// Cannon.js
+// Dimo.js
+
+// for physics
+// https://gafferongames.com/post/fix_your_timestep/
